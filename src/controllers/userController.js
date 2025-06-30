@@ -1,24 +1,17 @@
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 
-const signToken = id => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN
-  });
-};
-
-// Función para filtrar los campos que no están permitidos actualizar
+// Función para filtrar los campos permitidos
 const filterObj = (obj, ...allowedFields) => {
-  const newObj = {};
+  const filteredObj = {};
   Object.keys(obj).forEach(el => {
-    if (allowedFields.includes(el)) newObj[el] = obj[el];
+    if (allowedFields.includes(el)) filteredObj[el] = obj[el];
   });
-  return newObj;
+  return filteredObj;
 };
 
-exports.getAllUsers = catchAsync(async (req, res, next) => {
+// Obtener todos los usuarios
+exports.getAllUsers = catchAsync(async (req, res) => {
   const users = await User.find().select('-__v -password -passwordChangedAt');
   
   res.status(200).json({
@@ -30,17 +23,16 @@ exports.getAllUsers = catchAsync(async (req, res, next) => {
   });
 });
 
-// Middleware para obtener el ID del usuario actual
-exports.getMe = (req, res, next) => {
-  req.params.id = req.user.id;
-  next();
-};
-
-exports.getUser = catchAsync(async (req, res, next) => {
-  const user = await User.findById(req.params.id).select('-__v -password -passwordChangedAt');
+// Obtener el perfil del usuario actual
+exports.getMe = catchAsync(async (req, res) => {
+  // Obtener el primer usuario como ejemplo
+  const user = await User.findOne().select('-__v -password -passwordChangedAt');
   
   if (!user) {
-    return next(new AppError('No se encontró ningún usuario con ese ID', 404));
+    return res.status(404).json({
+      status: 'error',
+      message: 'No se encontró el perfil del usuario'
+    });
   }
   
   res.status(200).json({
@@ -51,14 +43,34 @@ exports.getUser = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.createUser = catchAsync(async (req, res, next) => {
-  // 1) Filtrar datos no permitidos
-  const filteredBody = filterObj(req.body, 'name', 'email', 'password');
+// Obtener un usuario por ID
+exports.getUser = catchAsync(async (req, res) => {
+  const user = await User.findById(req.params.id).select('-__v -password -passwordChangedAt');
   
-  // 2) Crear el usuario
+  if (!user) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'No se encontró ningún usuario con ese ID'
+    });
+  }
+  
+  res.status(200).json({
+    status: 'success',
+    data: {
+      user
+    }
+  });
+});
+
+// Crear un nuevo usuario
+exports.createUser = catchAsync(async (req, res) => {
+  // Filtrar datos permitidos
+  const filteredBody = filterObj(req.body, 'name', 'email', 'password', 'passwordConfirm');
+  
+  // Crear el usuario
   const newUser = await User.create(filteredBody);
   
-  // 3) Eliminar la contraseña de la respuesta
+  // No enviar la contraseña en la respuesta
   newUser.password = undefined;
   
   res.status(201).json({
@@ -69,22 +81,28 @@ exports.createUser = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.updateUser = catchAsync(async (req, res, next) => {
-  // 1) Verificar si el usuario existe
-  const user = await User.findById(req.params.id);
-  if (!user) {
-    return next(new AppError('No se encontró ningún usuario con ese ID', 404));
-  }
-  
-  // 2) Filtrar campos no permitidos
+// Actualizar un usuario
+exports.updateUser = catchAsync(async (req, res) => {
+  // Filtrar campos permitidos
   const filteredBody = filterObj(req.body, 'name', 'email');
   
-  // 3) Actualizar el documento del usuario
-  const updatedUser = await User.findByIdAndUpdate(req.params.id, filteredBody, {
-    new: true,
-    runValidators: true
-  });
-  
+  // Actualizar el usuario
+  const updatedUser = await User.findByIdAndUpdate(
+    req.params.id,
+    filteredBody,
+    {
+      new: true,
+      runValidators: true
+    }
+  ).select('-__v -password -passwordChangedAt');
+
+  if (!updatedUser) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'No se encontró ningún usuario con ese ID'
+    });
+  }
+
   res.status(200).json({
     status: 'success',
     data: {
@@ -93,11 +111,15 @@ exports.updateUser = catchAsync(async (req, res, next) => {
   });
 });
 
-exports.deleteUser = catchAsync(async (req, res, next) => {
+// Eliminar un usuario
+exports.deleteUser = catchAsync(async (req, res) => {
   const user = await User.findByIdAndDelete(req.params.id);
   
   if (!user) {
-    return next(new AppError('No se encontró ningún usuario con ese ID', 404));
+    return res.status(404).json({
+      status: 'error',
+      message: 'No se encontró ningún usuario con ese ID'
+    });
   }
   
   res.status(204).json({
@@ -106,26 +128,29 @@ exports.deleteUser = catchAsync(async (req, res, next) => {
   });
 });
 
-// Actualizar los datos del usuario actual
-exports.updateMe = catchAsync(async (req, res, next) => {
-  // 1) Crear un error si el usuario intenta actualizar la contraseña
-  if (req.body.password || req.body.passwordConfirm) {
-    return next(
-      new AppError(
-        'Esta ruta no es para actualizar contraseñas. Por favor usa /updateMyPassword.',
-        400
-      )
-    );
-  }
-
-  // 2) Filtrar campos no permitidos
+// Actualizar el perfil del usuario actual
+exports.updateMe = catchAsync(async (req, res) => {
+  // Filtrar campos permitidos
   const filteredBody = filterObj(req.body, 'name', 'email');
   
-  // 3) Actualizar el documento del usuario
-  const updatedUser = await User.findByIdAndUpdate(req.user.id, filteredBody, {
-    new: true,
-    runValidators: true
-  });
+  // Actualizar el usuario (usando el primer usuario como ejemplo)
+  const user = await User.findOne();
+  
+  if (!user) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'No se encontró el usuario'
+    });
+  }
+  
+  const updatedUser = await User.findByIdAndUpdate(
+    user._id,
+    filteredBody,
+    {
+      new: true,
+      runValidators: true
+    }
+  ).select('-__v -password -passwordChangedAt');
 
   res.status(200).json({
     status: 'success',
@@ -135,39 +160,22 @@ exports.updateMe = catchAsync(async (req, res, next) => {
   });
 });
 
-// Eliminar la cuenta del usuario actual (desactivar)
-exports.deleteMe = catchAsync(async (req, res, next) => {
-  await User.findByIdAndUpdate(req.user.id, { active: false });
+// Eliminar la cuenta del usuario actual
+exports.deleteMe = catchAsync(async (req, res) => {
+  // Usar el primer usuario como ejemplo
+  const user = await User.findOne();
+  
+  if (!user) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'No se encontró el usuario'
+    });
+  }
+  
+  await User.findByIdAndDelete(user._id);
 
   res.status(204).json({
     status: 'success',
     data: null
-  });
-});
-
-// Controlador para que los usuarios actualicen su propia contraseña
-exports.updatePassword = catchAsync(async (req, res, next) => {
-  // 1) Obtener el usuario del documento
-  const user = await User.findById(req.user.id).select('+password');
-  
-  // 2) Verificar si la contraseña actual es correcta
-  if (!(await user.comparePassword(req.body.currentPassword, user.password))) {
-    return next(new AppError('Tu contraseña actual es incorrecta', 401));
-  }
-  
-  // 3) Si es correcta, actualizar la contraseña
-  user.password = req.body.password;
-  user.passwordConfirm = req.body.passwordConfirm;
-  await user.save();
-  
-  // 4) Iniciar sesión del usuario, enviar JWT
-  const token = signToken(user._id);
-  
-  res.status(200).json({
-    status: 'success',
-    token,
-    data: {
-      user
-    }
   });
 });

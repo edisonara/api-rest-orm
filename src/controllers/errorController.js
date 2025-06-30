@@ -24,58 +24,32 @@ const handleJWTExpiredError = () =>
   new AppError('Tu sesión ha expirado! Por favor inicia sesión de nuevo.', 401);
 
 const sendErrorDev = (err, req, res) => {
-  // API
-  if (req.originalUrl.startsWith('/api')) {
-    return res.status(err.statusCode).json({
-      status: err.status,
-      error: err,
-      message: err.message,
-      stack: err.stack,
-    });
-  }
-  // RENDERED WEBSITE
-  console.error('ERROR 💥', err);
-  return res.status(err.statusCode).render('error', {
-    title: 'Algo salió mal!',
-    msg: err.message,
+  // Siempre devolvemos JSON
+  return res.status(err.statusCode).json({
+    status: err.status,
+    error: err,
+    message: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
   });
 };
 
 const sendErrorProd = (err, req, res) => {
-  // A) API
-  if (req.originalUrl.startsWith('/api')) {
-    // A) Operacional, error de confianza: enviar mensaje al cliente
-    if (err.isOperational) {
-      return res.status(err.statusCode).json({
-        status: err.status,
-        message: err.message,
-      });
-    }
-    // B) Error de programación o desconocido: no enviar detalles al cliente
-    // 1) Log error
-    console.error('ERROR 💥', err);
-    // 2) Enviar mensaje genérico
-    return res.status(500).json({
-      status: 'error',
-      message: '¡Algo salió muy mal!',
-    });
-  }
-
-  // B) RENDERED WEBSITE
-  // A) Error operacional, de confianza: enviar mensaje al cliente
+  // A) Operacional, error de confianza: enviar mensaje al cliente
   if (err.isOperational) {
-    return res.status(err.statusCode).render('error', {
-      title: 'Algo salió mal!',
-      msg: err.message,
+    return res.status(err.statusCode).json({
+      status: err.status,
+      message: err.message,
     });
   }
+  
   // B) Error de programación o desconocido: no enviar detalles al cliente
   // 1) Log error
   console.error('ERROR 💥', err);
+  
   // 2) Enviar mensaje genérico
-  return res.status(err.statusCode).render('error', {
-    title: 'Algo salió mal!',
-    msg: 'Por favor, inténtalo de nuevo más tarde.',
+  return res.status(500).json({
+    status: 'error',
+    message: '¡Algo salió muy mal!',
   });
 };
 

@@ -1,33 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const authController = require('../controllers/authController');
 
-// Rutas públicas
-router.post('/signup', authController.signup);
-router.post('/login', authController.login);
+// Obtener todos los usuarios
+router.get('/', userController.getAllUsers);
 
-// Aplicar autenticación a todas las rutas que vienen después de este punto
-router.use(authController.protect);
-
-// Rutas protegidas
-router.get('/me', userController.getMe, userController.getUser);
-router.patch('/updateMyPassword', authController.updatePassword);
-router.patch('/updateMe', userController.updateMe);
-router.delete('/deleteMe', userController.deleteMe);
-
-// Restringir las siguientes rutas solo a administradores
-router.use(authController.restrictTo('admin'));
-
-router
-  .route('/')
-  .get(userController.getAllUsers)
-  .post(userController.createUser);
-
-router
-  .route('/:id')
+// Operaciones CRUD en usuarios
+router.route('/:id')
   .get(userController.getUser)
   .patch(userController.updateUser)
   .delete(userController.deleteUser);
+
+// Ruta para obtener el perfil del usuario actual
+router.get('/me', userController.getMe);
+
+// Actualizar datos del usuario actual
+router.patch('/update-me', userController.updateMe);
+
+// Eliminar la cuenta del usuario actual
+router.delete('/delete-me', userController.deleteMe);
 
 module.exports = router;

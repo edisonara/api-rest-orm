@@ -29,6 +29,17 @@ const UserSchema = new mongoose.Schema({
     minlength: [6, 'La contraseña debe tener al menos 6 caracteres'],
     select: false // No devolver la contraseña en las consultas
   },
+  passwordConfirm: {
+    type: String,
+    required: [true, 'Por favor confirma tu contraseña'],
+    validate: {
+      // Esto solo funciona en CREATE y SAVE!!!
+      validator: function(el) {
+        return el === this.password;
+      },
+      message: 'Las contraseñas no coinciden'
+    }
+  },
   passwordChangedAt: Date,
   role: {
     type: String,
@@ -48,8 +59,11 @@ const UserSchema = new mongoose.Schema({
 
 // Middleware para hashear la contraseña antes de guardar
 UserSchema.pre('save', async function(next) {
-  // Solo hashear la contraseña si ha sido modificada (o es nueva)
+  // Solo ejecutar esta función si la contraseña fue modificada
   if (!this.isModified('password')) return next();
+  
+  // Eliminar el campo passwordConfirm ya que no lo necesitamos en la base de datos
+  this.passwordConfirm = undefined;
   
   try {
     // Generar un salt
