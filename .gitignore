@@ -1,0 +1,10 @@
+#archivos
+# Build output
+# Ignore build output
+/build/
+# Ignore node_modules
+/node_modules/
+# Ignore logs
+/logs/
+# Ignore environment variables
+/.env
